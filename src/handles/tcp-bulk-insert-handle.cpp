@@ -29,8 +29,10 @@ class TcpBulkInsertClient : noncopyable
 {
 public:
   TcpBulkInsertClient(TcpBulkInsertHandle& writer,
-                      const shared_ptr<boost::asio::ip::tcp::socket>& socket)
+                      const shared_ptr<boost::asio::ip::tcp::socket>& socket,
+                      KeyChain& keyChain)
     : m_writer(writer)
+    , m_keyChain(keyChain)
     , m_socket(socket)
     , m_hasStarted(false)
     , m_inputBufferSize(0)
@@ -54,9 +56,11 @@ private:
   handleReceive(const boost::system::error_code& error,
                 std::size_t nBytesReceived,
                 const shared_ptr<TcpBulkInsertClient>& client);
+  void onSendFinished(const boost::system::error_code& error);
 
 private:
   TcpBulkInsertHandle& m_writer;
+  KeyChain& m_keyChain;
   shared_ptr<boost::asio::ip::tcp::socket> m_socket;
   bool m_hasStarted;
   uint8_t m_inputBuffer[MAX_NDN_PACKET_SIZE];
@@ -66,9 +70,10 @@ private:
 } // namespace detail
 
 TcpBulkInsertHandle::TcpBulkInsertHandle(boost::asio::io_service& ioService,
-                                         RepoStorage& storageHandle)
+                                         RepoStorage& storageHandle, KeyChain& keyChain)
   : m_acceptor(ioService)
   , m_storageHandle(storageHandle)
+  , m_keyChain(keyChain)
 {
 }
 
@@ -127,7 +132,7 @@ TcpBulkInsertHandle::handleAccept(const boost::system::error_code& error,
   std::cerr << "New connection from " << socket->remote_endpoint() << std::endl;
 
   shared_ptr<detail::TcpBulkInsertClient> client =
-    make_shared<detail::TcpBulkInsertClient>(boost::ref(*this), socket);
+    make_shared<detail::TcpBulkInsertClient>(boost::ref(*this), socket, m_keyChain);
   detail::TcpBulkInsertClient::startReceive(client);
 
   // prepare accepting the next connection
@@ -182,6 +187,27 @@ detail::TcpBulkInsertClient::handleReceive(const boost::system::error_code& erro
       catch (std::runtime_error& error) {
         /// \todo Catch specific error after determining what wireDecode() can throw
         std::cerr << "Error decoding received Data packet" << std::endl;
+          std::cerr << error.what() << std::endl;
+      }
+    } else if(element.type() == ndn::tlv::Interest) {
+      try {
+        Interest interest(element);
+        shared_ptr<Data> data = m_writer.getStorageHandle().readData(interest);
+        if (data != NULL) {
+          // do nothing
+        } else {
+          data = make_shared<Data>();
+          data->setName(interest.getName());
+          data->setFreshnessPeriod(ndn::time::seconds(10));
+//          static const std::string content = "";
+//          data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
+          m_keyChain.sign(*data);
+        }
+        m_socket->async_send(boost::asio::buffer(data->wireEncode().wire(),  data->wireEncode().size()),
+                               bind(&TcpBulkInsertClient::onSendFinished, this, _1));
+      } catch (std::runtime_error& error) {
+        std::cerr << "Error decoding received Interest packet" << std::endl;
+          std::cerr << error.what() << std::endl;
       }
     }
   }
@@ -211,6 +237,15 @@ detail::TcpBulkInsertClient::handleReceive(const boost::system::error_code& erro
   m_socket->async_receive(boost::asio::buffer(m_inputBuffer + m_inputBufferSize,
                                               MAX_NDN_PACKET_SIZE - m_inputBufferSize), 0,
                           bind(&TcpBulkInsertClient::handleReceive, this, _1, _2, client));
+}
+    
+void
+detail::TcpBulkInsertClient::onSendFinished(const boost::system::error_code& error)
+{
+  if (error) {
+    std::cerr << "TCP connection aborted" << std::endl;
+    return;
+  }
 }
 
 

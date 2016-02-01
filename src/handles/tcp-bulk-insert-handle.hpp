@@ -42,7 +42,7 @@ public:
 
 public:
   TcpBulkInsertHandle(boost::asio::io_service& ioService,
-                      RepoStorage& storageHandle);
+                      RepoStorage& storageHandle, KeyChain& keyChain);
 
   void
   listen(const std::string& host, const std::string& port);
@@ -65,6 +65,7 @@ private:
   boost::asio::ip::tcp::acceptor m_acceptor;
   boost::asio::ip::tcp::endpoint m_localEndpoint;
   RepoStorage& m_storageHandle;
+  KeyChain& m_keyChain;
 };
 
 } // namespace repo
