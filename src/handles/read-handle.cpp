@@ -24,7 +24,6 @@ namespace repo {
 void
 ReadHandle::onInterest(const Name& prefix, const Interest& interest)
 {
-
   shared_ptr<ndn::Data> data = getStorageHandle().readData(interest);
   if (data != NULL) {
       getFace().put(*data);

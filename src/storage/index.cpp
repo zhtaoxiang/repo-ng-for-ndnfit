@@ -46,8 +46,9 @@ matchesSimpleSelectors(const Interest& interest, ndn::ConstBufferPtr& hash,
 
   if (!interest.getExclude().empty() &&
       entry.getName().size() > interest.getName().size() &&
-      interest.getExclude().isExcluded(entry.getName()[interest.getName().size()]))
+      interest.getExclude().isExcluded(entry.getName()[interest.getName().size()])) {
     return false;
+  }
   if (!interest.getPublisherPublicKeyLocator().empty())
     {
       if (*entry.getKeyLocatorHash() != *hash)
@@ -200,7 +201,9 @@ Index::selectChild(const Interest& interest,
       while (true)
         {
           IndexContainer::const_iterator prev = last;
-          --prev;
+            if (prev != boundary) {
+                --prev;
+            }
           if (prev == boundary)
             {
               bool isMatch = matchesSimpleSelectors(interest, hash, (*prev));
