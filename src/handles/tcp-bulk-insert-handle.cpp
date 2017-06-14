@@ -203,8 +203,8 @@ detail::TcpBulkInsertClient::handleReceive(const boost::system::error_code& erro
 //          data->setContent(reinterpret_cast<const uint8_t*>(content.c_str()), content.size());
           m_keyChain.sign(*data);
         }
-        m_socket->async_send(boost::asio::buffer(data->wireEncode().wire(),  data->wireEncode().size()),
-                               bind(&TcpBulkInsertClient::onSendFinished, this, _1));
+        m_socket->send(boost::asio::buffer(data->wireEncode().wire(),  data->wireEncode().size()));
+                               //bind(&TcpBulkInsertClient::onSendFinished, this, _1));
       } catch (std::runtime_error& error) {
         std::cerr << "Error decoding received Interest packet" << std::endl;
           std::cerr << error.what() << std::endl;
